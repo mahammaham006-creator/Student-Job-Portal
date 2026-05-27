@@ -6,7 +6,7 @@ require('dotenv').config();
 const app = express();
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
 app.use(express.json());
 
 // Routes
@@ -18,16 +18,33 @@ app.use('/api/companies', require('./routes/companies'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/admin', require('./routes/admin'));
 
-// Connect to DB then start server
-const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/student-job-portal';
+// MongoDB connection — cached for serverless (avoids new connection on every request)
+let isConnected = false;
 
-mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log('MongoDB connected');
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch(err => {
-    console.error('Database connection error:', err);
-    process.exit(1);
-  });
+const connectDB = async () => {
+  if (isConnected) return;
+  const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+  await mongoose.connect(MONGO_URI);
+  isConnected = true;
+  console.log('MongoDB connected');
+};
+
+// Middleware to ensure DB is connected before handling any request
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('DB connection failed:', err.message);
+    res.status(500).json({ message: 'Database connection failed' });
+  }
+});
+
+// For local development — start a normal server
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
+
+// Export for Vercel serverless
+module.exports = app;
