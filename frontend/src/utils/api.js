@@ -1,9 +1,9 @@
 import axios from 'axios';
 
+// Always use relative /api — Vercel rewrites proxy it to the backend
+// This eliminates all CORS issues since requests stay same-origin
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL
-    ? `${import.meta.env.VITE_API_URL}/api`
-    : '/api',  // uses Vite proxy in dev; relative path works in production too
+  baseURL: '/api',
 });
 
 api.interceptors.request.use((config) => {
