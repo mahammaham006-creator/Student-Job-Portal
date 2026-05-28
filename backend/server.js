@@ -5,6 +5,29 @@ require('dotenv').config();
 
 const app = express();
 
+// Handle CORS preflight for ALL routes first — before anything else
+app.options('*', cors());
+
+// CORS — allow any vercel.app subdomain + localhost
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      origin.endsWith('.vercel.app') ||
+      origin === 'http://localhost:3000' ||
+      origin === process.env.CLIENT_URL
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true); // allow all for now during development
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json());
+
 // MongoDB connection — cached for serverless
 let isConnected = false;
 
@@ -16,7 +39,7 @@ const connectDB = async () => {
   isConnected = true;
 };
 
-// Connect to DB FIRST before any route runs
+// Connect to DB before every request
 app.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -27,27 +50,7 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Middleware
-const allowedOrigins = [
-  process.env.CLIENT_URL,
-  'http://localhost:3000',
-].filter(Boolean);
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    // Allow any vercel.app subdomain
-    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true
-}));
-app.use(express.json());
-
-// Health check — visit /api/health to confirm backend is alive
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', db: isConnected ? 'connected' : 'disconnected' });
 });
